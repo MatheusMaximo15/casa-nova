@@ -207,12 +207,17 @@ details[open] summary .chev{transform:rotate(180deg);}
 }
 .item-row{
   display:flex;
-  align-items:center;
-  gap:12px;
+  flex-direction:column;
+  gap:9px;
   padding:13px 18px;
   border-bottom:1px solid var(--line);
 }
 .item-row:last-child{border-bottom:none;}
+.item-top{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
 .item-name{
   flex:1;
   font-size:15px;
@@ -234,19 +239,25 @@ details[open] summary .chev{transform:rotate(180deg);}
 }
 .btn-choose:hover{background:var(--forest-dark);}
 
+.claimers{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  padding-left:2px;
+}
 .claimed-tag{
   display:flex;
   align-items:center;
-  gap:8px;
+  gap:6px;
   background:var(--claimed);
   border:1px solid var(--claimed-border);
   border-radius:20px;
-  padding:6px 6px 6px 12px;
-  font-size:13px;
+  padding:4px 10px;
+  font-size:12.5px;
   color:var(--forest-dark);
   white-space:nowrap;
 }
-.claimed-tag .heart{width:13px;height:13px;color:var(--gold);flex:0 0 auto;}
+.claimed-tag .heart{width:12px;height:12px;color:var(--gold);flex:0 0 auto;}
 .claimed-tag .who{font-weight:700;}
 
 /* ---------- FOOTER ---------- */
@@ -345,11 +356,12 @@ details[open] summary .chev{transform:rotate(180deg);}
   <div class="name-bar">
     <label for="guestName">Seu nome</label>
     <input type="text" id="guestName" placeholder="Digite seu nome para escolher os presentes" autocomplete="off">
-    <p class="hint">Preencha seu nome e escolha 1 item abaixo. Cada pessoa pode levar até 1 presente, e cada item só pode ser escolhido por uma pessoa.</p>
+    <p class="hint">Preencha seu nome e escolha 1 item abaixo. Cada pessoa leva no máximo 1 presente — mas o mesmo item pode ser escolhido por mais de uma pessoa (ex.: várias pessoas podem trazer lixeira).</p>
   </div>
 
   <div class="progress-block">
-    <div class="progress-label"><strong id="claimedCount">0</strong> de <strong id="totalCount">0</strong> presentes já escolhidos</div>
+    <div class="progress-label"><strong id="claimedCount">0</strong> presentes já garantidos</div>
+    <div class="progress-label" style="margin-top:4px;font-size:12px;"><strong id="typesWithSomeone">0</strong> de <strong id="totalCount">0</strong> tipos de item já têm alguém confirmado</div>
     <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
   </div>
 
@@ -434,8 +446,11 @@ function buildDOM(){
       row.className = "item-row";
       row.dataset.id = id;
       row.innerHTML = `
-        <span class="item-name">${itemName}</span>
-        <span class="action"></span>
+        <div class="item-top">
+          <span class="item-name">${itemName}</span>
+          <span class="action"></span>
+        </div>
+        <div class="claimers"></div>
       `;
       list.appendChild(row);
     });
@@ -450,43 +465,51 @@ function heartIcon(){
 }
 
 function render(){
-  let total = 0, claimedTotal = 0;
+  let totalTypes = 0, typesWithSomeone = 0, totalGifts = 0;
   DATA.forEach(cat => {
-    let catClaimed = 0;
+    let catTypesWithSomeone = 0;
     cat.items.forEach((itemName, ii) => {
       const id = ident(cat.key, ii);
-      total++;
+      totalTypes++;
       const row = catRoot.querySelector(`.item-row[data-id="${id}"]`);
       if(!row) return;
       const nameEl = row.querySelector(".item-name");
       const actionEl = row.querySelector(".action");
-      const claim = claims[id];
-      if(claim && claim.name){
-        catClaimed++; claimedTotal++;
+      const claimersEl = row.querySelector(".claimers");
+      const names = claims[id] || [];
+
+      if(names.length > 0){
+        catTypesWithSomeone++; typesWithSomeone++;
+        totalGifts += names.length;
         nameEl.classList.add("is-claimed");
-        actionEl.innerHTML = "";
-        const tag = document.createElement("span");
-        tag.className = "claimed-tag";
-        tag.innerHTML = `${heartIcon()}<span class="who">${escapeHtml(claim.name)}</span>`;
-        actionEl.appendChild(tag);
       } else {
         nameEl.classList.remove("is-claimed");
-        actionEl.innerHTML = "";
-        const btn = document.createElement("button");
-        btn.className = "btn-choose";
-        btn.type = "button";
-        btn.textContent = "Escolher";
-        btn.addEventListener("click", () => claimItem(id));
-        actionEl.appendChild(btn);
       }
+
+      claimersEl.innerHTML = "";
+      names.forEach(n => {
+        const tag = document.createElement("span");
+        tag.className = "claimed-tag";
+        tag.innerHTML = `${heartIcon()}<span class="who">${escapeHtml(n)}</span>`;
+        claimersEl.appendChild(tag);
+      });
+
+      actionEl.innerHTML = "";
+      const btn = document.createElement("button");
+      btn.className = "btn-choose";
+      btn.type = "button";
+      btn.textContent = "Escolher";
+      btn.addEventListener("click", () => claimItem(id));
+      actionEl.appendChild(btn);
     });
     const countEl = catRoot.querySelector(`.count[data-cat="${cat.key}"]`);
-    if(countEl) countEl.textContent = `${catClaimed}/${cat.items.length}`;
+    if(countEl) countEl.textContent = `${catTypesWithSomeone}/${cat.items.length}`;
   });
 
-  document.getElementById("claimedCount").textContent = claimedTotal;
-  document.getElementById("totalCount").textContent = total;
-  const pct = total ? Math.round((claimedTotal/total)*100) : 0;
+  document.getElementById("claimedCount").textContent = totalGifts;
+  document.getElementById("typesWithSomeone").textContent = typesWithSomeone;
+  document.getElementById("totalCount").textContent = totalTypes;
+  const pct = totalTypes ? Math.round((typesWithSomeone/totalTypes)*100) : 0;
   document.getElementById("progressFill").style.width = pct + "%";
 }
 
@@ -514,7 +537,8 @@ async function loadClaims(){
     if(error) throw error;
     claims = {};
     (data || []).forEach(row => {
-      claims[row.item_id] = { name: row.guest_name };
+      if(!claims[row.item_id]) claims[row.item_id] = [];
+      claims[row.item_id].push(row.guest_name);
     });
   }catch(e){
     console.error("Erro ao carregar reservas:", e);
@@ -558,18 +582,20 @@ async function claimItem(id){
 
   const { error } = await sb.from("gift_claims").insert({ item_id: id, guest_name: name });
   if(error){
-    // 23505 = violação de chave única -> alguém já escolheu esse item
+    // 23505 = violação de chave única -> você já tem esse item específico registrado
+    // (ex.: clique duplo). Outra pessoa levando o mesmo item nunca gera esse erro.
     if(error.code === "23505"){
       await loadClaims();
       render();
-      showToast("Alguém acabou de escolher esse item. Veja outra opção 🌿");
+      showToast("Esse item já está registrado com o seu nome.");
     } else {
       console.error(error);
       showToast("Não foi possível salvar agora. Tente de novo.");
     }
     return;
   }
-  claims[id] = { name };
+  if(!claims[id]) claims[id] = [];
+  claims[id].push(name);
   render();
   showToast(`Presente escolhido, ${name}! 💚`);
 }
